@@ -3,32 +3,32 @@ import { DurableObject } from "cloudflare:workers";
 export class CareerSession extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
-    this.history = [];
-    this.profile = null;
   }
 
   async setProfile(resume, targetRole) {
-    this.profile = { resume, targetRole };
+    await this.ctx.storage.put("resume", resume);
+    await this.ctx.storage.put("targetRole", targetRole);
   }
 
   async getProfile() {
-    return this.profile;
+    const resume = await this.ctx.storage.get("resume");
+    const targetRole = await this.ctx.storage.get("targetRole");
+    return { resume, targetRole };
   }
 
   async addMessage(role, content) {
-    this.history.push({ role, content });
-    if (this.history.length > 30) {
-      this.history = this.history.slice(-30);
-    }
+    let history = (await this.ctx.storage.get("history")) || [];
+    history.push({ role, content });
+    if (history.length > 30) history = history.slice(-30);
+    await this.ctx.storage.put("history", history);
   }
 
   async getHistory() {
-    return this.history;
+    return (await this.ctx.storage.get("history")) || [];
   }
 
   async clearSession() {
-    this.history = [];
-    this.profile = null;
+    await this.ctx.storage.deleteAll();
   }
 }
 
@@ -51,6 +51,7 @@ export default {
       const id = env.CAREER_SESSION.idFromName(sessionId || "default");
       const session = env.CAREER_SESSION.get(id);
 
+      await session.clearSession();
       await session.setProfile(resume, targetRole);
 
       const systemPrompt = `You are an expert AI career coach with 20 years of experience in tech hiring.
@@ -70,6 +71,7 @@ Be honest and specific.`;
       const aiResponse = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
         system: systemPrompt,
         messages: [{ role: "user", content: firstMessage }],
+        max_tokens: 2048,
       });
 
       const reply = aiResponse.response;
@@ -106,7 +108,8 @@ Be direct, specific, and actionable. Use bullet points where helpful.`;
       const aiResponse = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
         system: systemPrompt,
         messages: messages,
-      });
+        max_tokens: 2048,
+      });	
 
       const reply = aiResponse.response;
       await session.addMessage("assistant", reply);
