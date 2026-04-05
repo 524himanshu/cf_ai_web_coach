@@ -1,68 +1,85 @@
 import { DurableObject } from "cloudflare:workers";
 
-/**
- * Welcome to Cloudflare Workers! This is your first Durable Objects application.
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your Durable Object in action
- * - Run `npm run deploy` to publish your application
- *
- * Learn more at https://developers.cloudflare.com/durable-objects
- */
+export class ChatSession extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.history = [];
+  }
 
-/**
- * Env provides a mechanism to reference bindings declared in wrangler.jsonc within JavaScript
- *
- * @typedef {Object} Env
- * @property {DurableObjectNamespace} MY_DURABLE_OBJECT - The Durable Object namespace binding
- */
+  async addMessage(role, content) {
+    this.history.push({ role, content });
+    if (this.history.length > 20) {
+      this.history = this.history.slice(-20);
+    }
+  }
 
-/** A Durable Object's behavior is defined in an exported Javascript class */
-export class MyDurableObject extends DurableObject {
-	/**
-	 * The constructor is invoked once upon creation of the Durable Object, i.e. the first call to
-	 * 	`DurableObjectStub::get` for a given identifier (no-op constructors can be omitted)
-	 *
-	 * @param {DurableObjectState} ctx - The interface for interacting with Durable Object state
-	 * @param {Env} env - The interface to reference bindings declared in wrangler.jsonc
-	 */
-	constructor(ctx, env) {
-		super(ctx, env);
-	}
+  async getHistory() {
+    return this.history;
+  }
 
-	/**
-	 * The Durable Object exposes an RPC method sayHello which will be invoked when a Durable
-	 *  Object instance receives a request from a Worker via the same method invocation on the stub
-	 *
-	 * @param {string} name - The name provided to a Durable Object instance from a Worker
-	 * @returns {Promise<string>} The greeting to be sent back to the Worker
-	 */
-	async sayHello(name) {
-		return `Hello, ${name}!`;
-	}
+  async clearHistory() {
+    this.history = [];
+  }
 }
 
 export default {
-	/**
-	 * This is the standard fetch handler for a Cloudflare Worker
-	 *
-	 * @param {Request} request - The request submitted to the Worker from the client
-	 * @param {Env} env - The interface to reference bindings declared in wrangler.jsonc
-	 * @param {ExecutionContext} ctx - The execution context of the Worker
-	 * @returns {Promise<Response>} The response to be sent back to the client
-	 */
-	async fetch(request, env, ctx) {
-		// Create a stub to open a communication channel with the Durable Object
-		// instance named "foo".
-		//
-		// Requests from all Workers to the Durable Object instance named "foo"
-		// will go to a single remote Durable Object instance.
-		const stub = env.MY_DURABLE_OBJECT.getByName("foo");
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    };
 
-		// Call the `sayHello()` RPC method on the stub to invoke the method on
-		// the remote Durable Object instance.
-		const greeting = await stub.sayHello("world");
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders });
+    }
 
-		return new Response(greeting);
-	},
+    if (url.pathname === "/chat" && request.method === "POST") {
+      const { message, sessionId } = await request.json();
+
+      const id = env.CHAT_SESSION.idFromName(sessionId || "default");
+      const session = env.CHAT_SESSION.get(id);
+
+      await session.addMessage("user", message);
+      const history = await session.getHistory();
+
+      const systemPrompt = `You are an expert web performance coach. 
+When given a website URL or a question about web performance, you analyze and provide:
+1. Specific performance issues
+2. Speed optimization suggestions  
+3. UX improvements
+4. Cloudflare-specific recommendations (CDN, caching, Workers)
+Keep responses clear, structured, and actionable.`;
+
+      const messages = history.map((h) => ({
+        role: h.role,
+        content: h.content,
+      }));
+
+      const aiResponse = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
+        system: systemPrompt,
+        messages: messages,
+      });
+
+      const reply = aiResponse.response;
+      await session.addMessage("assistant", reply);
+
+      return new Response(JSON.stringify({ reply }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (url.pathname === "/clear" && request.method === "POST") {
+      const { sessionId } = await request.json();
+      const id = env.CHAT_SESSION.idFromName(sessionId || "default");
+      const session = env.CHAT_SESSION.get(id);
+      await session.clearHistory();
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response("CF AI Web Coach API", { headers: corsHeaders });
+  },
 };
