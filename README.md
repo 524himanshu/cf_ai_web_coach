@@ -1,16 +1,17 @@
-# CF AI Web Coach ⚡
+# CF AI Career Coach ⚡
 
-An AI-powered web performance analyzer built on Cloudflare's developer platform.
+An AI-powered career coaching chatbot built on Cloudflare's developer platform.
 
 ## What it does
 
-Users can type a website URL or ask performance-related questions in a chat interface. The AI analyzes and returns:
-- Specific performance issues
-- Speed optimization suggestions
-- UX improvements
-- Cloudflare-specific recommendations (CDN, caching, Workers)
+Users paste their resume and target role. The AI coach analyzes the profile and provides:
+- Resume score out of 10
+- Top 3 strengths for the target role
+- Top 3 gaps or weaknesses
+- Specific action items to improve chances
+- Multi-turn conversation for follow-up questions
 
-The conversation is stateful — it remembers your previous messages within a session.
+The conversation is fully stateful — it remembers your resume, role, and entire chat history within a session using Cloudflare Durable Objects storage.
 
 ## Live Demo
 
@@ -22,11 +23,11 @@ The conversation is stateful — it remembers your previous messages within a se
 |-----------|------------|
 | LLM | Llama 3.3 70B via Cloudflare Workers AI |
 | Workflow | Cloudflare Worker (API routing) |
-| Memory/State | Cloudflare Durable Objects |
+| Memory/State | Cloudflare Durable Objects (persistent storage API) |
 | Frontend | HTML/CSS/JS served via Cloudflare Assets |
 | Deployment | Cloudflare Workers |
 
-## How to Run Locally
+## How to Run
 
 ### Prerequisites
 - Node.js v18+
@@ -46,17 +47,19 @@ Then open the deployed URL in your browser.
 
 ## API Endpoints
 
-- `POST /chat` — Send a message `{ message, sessionId }`
-- `POST /clear` — Clear session history `{ sessionId }`
+- `POST /start` — Submit resume + target role `{ resume, targetRole, sessionId }`
+- `POST /chat` — Send follow-up message `{ message, sessionId }`
+- `POST /clear` — Clear session `{ sessionId }`
 
 ## Architecture
 ```
 User (Browser)
      ↓
-Cloudflare Pages (HTML/CSS/JS)
+Cloudflare Assets (HTML/CSS/JS)
      ↓
-Cloudflare Worker (API)
+Cloudflare Worker (API routing)
      ↓
-Durable Object (Session Memory)
+Durable Object (Persistent session memory)
      ↓
-Workers AI — Llama 3.3
+Workers AI — Llama 3.3 70B
+```
