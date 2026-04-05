@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>CF AI Web Coach</title>
+  <title>CF AI Career Coach</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'Segoe UI', sans-serif;
       background: #0a0a0a;
       color: #f0f0f0;
-      height: 100vh;
+      min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -21,31 +21,93 @@
       padding: 16px 24px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      justify-content: space-between;
     }
     header h1 { font-size: 1.2rem; color: white; font-weight: 700; }
-    header span { font-size: 0.85rem; color: rgba(255,255,255,0.8); }
-    .container {
+    header span { font-size: 0.85rem; color: rgba(255,255,255,0.85); }
+    #start-screen {
       width: 100%;
-      max-width: 800px;
-      flex: 1;
+      max-width: 700px;
+      padding: 40px 16px;
       display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    #start-screen h2 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #f6821f;
+    }
+    #start-screen p {
+      color: #888;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+    label {
+      font-size: 0.9rem;
+      color: #aaa;
+      margin-bottom: 6px;
+      display: block;
+    }
+    input[type="text"], textarea {
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      background: #1a1a1a;
+      color: #f0f0f0;
+      font-size: 0.95rem;
+      outline: none;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    input[type="text"]:focus, textarea:focus { border-color: #f6821f; }
+    textarea { resize: vertical; min-height: 200px; line-height: 1.6; }
+    .btn-primary {
+      padding: 14px 28px;
+      border-radius: 8px;
+      border: none;
+      background: #f6821f;
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 1rem;
+      width: 100%;
+    }
+    .btn-primary:hover { background: #e07010; }
+    .btn-primary:disabled { background: #555; cursor: not-allowed; }
+    #chat-screen {
+      width: 100%;
+      max-width: 700px;
+      flex: 1;
+      display: none;
       flex-direction: column;
       padding: 24px 16px;
       gap: 16px;
+      min-height: calc(100vh - 60px);
+    }
+    .role-badge {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      padding: 8px 14px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      color: #f6821f;
+      display: inline-block;
     }
     #chat-box {
       flex: 1;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 16px;
+      min-height: 400px;
+      max-height: 60vh;
+      overflow-y: auto;
     }
     .message {
-      max-width: 80%;
-      padding: 12px 16px;
+      padding: 14px 18px;
       border-radius: 12px;
-      line-height: 1.6;
+      line-height: 1.7;
       font-size: 0.95rem;
       white-space: pre-wrap;
     }
@@ -53,23 +115,29 @@
       background: #f6821f;
       color: white;
       align-self: flex-end;
+      max-width: 80%;
       border-bottom-right-radius: 4px;
     }
     .assistant {
       background: #1a1a1a;
-      border: 1px solid #333;
+      border: 1px solid #2a2a2a;
       color: #f0f0f0;
       align-self: flex-start;
+      width: 100%;
       border-bottom-left-radius: 4px;
     }
     .typing {
       background: #1a1a1a;
-      border: 1px solid #333;
+      border: 1px solid #2a2a2a;
       color: #888;
-      align-self: flex-start;
+      padding: 14px 18px;
       border-radius: 12px;
-      padding: 12px 16px;
       font-size: 0.9rem;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
     }
     .input-row {
       display: flex;
@@ -86,7 +154,7 @@
       outline: none;
     }
     #user-input:focus { border-color: #f6821f; }
-    button {
+    .btn-send {
       padding: 12px 20px;
       border-radius: 8px;
       border: none;
@@ -96,40 +164,73 @@
       cursor: pointer;
       font-size: 0.95rem;
     }
-    button:hover { background: #e07010; }
-    #clear-btn {
-      background: #1a1a1a;
+    .btn-send:hover { background: #e07010; }
+    .btn-clear {
+      padding: 12px 16px;
+      border-radius: 8px;
       border: 1px solid #333;
+      background: transparent;
       color: #888;
+      cursor: pointer;
+      font-size: 0.85rem;
     }
-    #clear-btn:hover { border-color: #f6821f; color: #f6821f; }
-    .welcome {
-      text-align: center;
-      color: #555;
-      margin-top: 60px;
+    .btn-clear:hover { border-color: #f6821f; color: #f6821f; }
+    .suggestions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
     }
-    .welcome h2 { font-size: 1.4rem; margin-bottom: 8px; color: #888; }
-    .welcome p { font-size: 0.9rem; }
+    .suggestion {
+      padding: 8px 14px;
+      border-radius: 20px;
+      border: 1px solid #333;
+      background: transparent;
+      color: #aaa;
+      cursor: pointer;
+      font-size: 0.82rem;
+    }
+    .suggestion:hover { border-color: #f6821f; color: #f6821f; }
   </style>
 </head>
 <body>
   <header>
     <div>
-      <h1>⚡ CF AI Web Coach</h1>
-      <span>Powered by Cloudflare Workers AI + Llama 3.3</span>
+      <h1>⚡ CF AI Career Coach</h1>
+      <span>Powered by Cloudflare Workers AI</span>
     </div>
   </header>
-  <div class="container">
-    <div id="chat-box">
-      <div class="welcome">
-        <h2>Analyze any website's performance</h2>
-        <p>Try: "Analyze github.com" or "How can I improve my site's speed?"</p>
-      </div>
+
+  <!-- Start Screen -->
+  <div id="start-screen">
+    <div>
+      <h2>Get honest career feedback</h2>
+      <p>Paste your resume and target role. Our AI coach will analyze your profile and help you land the job.</p>
+    </div>
+    <div>
+      <label>Target Role *</label>
+      <input type="text" id="target-role" placeholder="e.g. Frontend Engineer at Cloudflare" />
+    </div>
+    <div>
+      <label>Your Resume *</label>
+      <textarea id="resume-input" placeholder="Paste your resume text here..."></textarea>
+    </div>
+    <button class="btn-primary" onclick="startSession()">Analyze My Resume →</button>
+  </div>
+
+  <!-- Chat Screen -->
+  <div id="chat-screen">
+    <div class="role-badge" id="role-display"></div>
+    <div id="chat-box"></div>
+    <div class="suggestions">
+      <button class="suggestion" onclick="quickAsk('What interview questions should I prepare for?')">Interview prep</button>
+      <button class="suggestion" onclick="quickAsk('How should I improve my resume summary?')">Resume summary</button>
+      <button class="suggestion" onclick="quickAsk('What skills should I learn next?')">Skills to learn</button>
+      <button class="suggestion" onclick="quickAsk('How do I negotiate salary for this role?')">Salary tips</button>
     </div>
     <div class="input-row">
-      <input id="user-input" type="text" placeholder="Ask about web performance..." />
-      <button onclick="sendMessage()">Send</button>
-      <button id="clear-btn" onclick="clearChat()">Clear</button>
+      <input id="user-input" type="text" placeholder="Ask your coach anything..." />
+      <button class="btn-send" onclick="sendMessage()">Send</button>
+      <button class="btn-clear" onclick="startOver()">Start Over</button>
     </div>
   </div>
 
@@ -137,16 +238,16 @@
     const API = "https://cf-ai-web-coach.himanshu524.workers.dev";
     const sessionId = "session-" + Math.random().toString(36).slice(2);
 
+    const startScreen = document.getElementById("start-screen");
+    const chatScreen = document.getElementById("chat-screen");
     const chatBox = document.getElementById("chat-box");
-    const input = document.getElementById("user-input");
+    const userInput = document.getElementById("user-input");
 
-    input.addEventListener("keydown", (e) => {
+    userInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") sendMessage();
     });
 
     function addMessage(role, text) {
-      const welcome = chatBox.querySelector(".welcome");
-      if (welcome) welcome.remove();
       const div = document.createElement("div");
       div.className = "message " + role;
       div.textContent = text;
@@ -155,17 +256,59 @@
       return div;
     }
 
-    async function sendMessage() {
-      const message = input.value.trim();
-      if (!message) return;
-      input.value = "";
-      addMessage("user", message);
-
-      const typing = document.createElement("div");
-      typing.className = "typing";
-      typing.textContent = "Analyzing...";
-      chatBox.appendChild(typing);
+    function showTyping() {
+      const div = document.createElement("div");
+      div.className = "typing";
+      div.id = "typing-indicator";
+      div.textContent = "Your coach is thinking...";
+      chatBox.appendChild(div);
       chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function removeTyping() {
+      const t = document.getElementById("typing-indicator");
+      if (t) t.remove();
+    }
+
+    async function startSession() {
+      const resume = document.getElementById("resume-input").value.trim();
+      const targetRole = document.getElementById("target-role").value.trim();
+
+      if (!resume || !targetRole) {
+        alert("Please fill in both fields.");
+        return;
+      }
+
+      const btn = document.querySelector(".btn-primary");
+      btn.disabled = true;
+      btn.textContent = "Analyzing your resume...";
+
+      try {
+        const res = await fetch(`${API}/start`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resume, targetRole, sessionId }),
+        });
+        const data = await res.json();
+
+        startScreen.style.display = "none";
+        chatScreen.style.display = "flex";
+        document.getElementById("role-display").textContent = "🎯 " + targetRole;
+
+        addMessage("assistant", data.reply);
+      } catch (err) {
+        alert("Error connecting. Please try again.");
+        btn.disabled = false;
+        btn.textContent = "Analyze My Resume →";
+      }
+    }
+
+    async function sendMessage() {
+      const message = userInput.value.trim();
+      if (!message) return;
+      userInput.value = "";
+      addMessage("user", message);
+      showTyping();
 
       try {
         const res = await fetch(`${API}/chat`, {
@@ -174,24 +317,30 @@
           body: JSON.stringify({ message, sessionId }),
         });
         const data = await res.json();
-        typing.remove();
+        removeTyping();
         addMessage("assistant", data.reply);
       } catch (err) {
-        typing.remove();
-        addMessage("assistant", "Error connecting to API. Please try again.");
+        removeTyping();
+        addMessage("assistant", "Error connecting. Please try again.");
       }
     }
 
-    async function clearChat() {
+    function quickAsk(question) {
+      userInput.value = question;
+      sendMessage();
+    }
+
+    async function startOver() {
       await fetch(`${API}/clear`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId }),
       });
-      chatBox.innerHTML = `<div class="welcome">
-        <h2>Analyze any website's performance</h2>
-        <p>Try: "Analyze github.com" or "How can I improve my site's speed?"</p>
-      </div>`;
+      chatScreen.style.display = "none";
+      startScreen.style.display = "flex";
+      chatBox.innerHTML = "";
+      document.getElementById("resume-input").value = "";
+      document.getElementById("target-role").value = "";
     }
   </script>
 </body>

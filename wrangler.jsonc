@@ -17,8 +17,8 @@
   "durable_objects": {
     "bindings": [
       {
-        "class_name": "ChatSession",
-        "name": "CHAT_SESSION"
+        "class_name": "CareerSession",
+        "name": "CAREER_SESSION"
       }
     ]
   },
@@ -26,6 +26,15 @@
     {
       "tag": "v1",
       "new_sqlite_classes": ["ChatSession"]
+    },
+    {
+      "tag": "v2",
+      "renamed_classes": [
+        {
+          "from": "ChatSession",
+          "to": "CareerSession"
+        }
+      ]
     }
   ]
 }

@@ -1,15 +1,24 @@
 import { DurableObject } from "cloudflare:workers";
 
-export class ChatSession extends DurableObject {
+export class CareerSession extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.history = [];
+    this.profile = null;
+  }
+
+  async setProfile(resume, targetRole) {
+    this.profile = { resume, targetRole };
+  }
+
+  async getProfile() {
+    return this.profile;
   }
 
   async addMessage(role, content) {
     this.history.push({ role, content });
-    if (this.history.length > 20) {
-      this.history = this.history.slice(-20);
+    if (this.history.length > 30) {
+      this.history = this.history.slice(-30);
     }
   }
 
@@ -17,8 +26,9 @@ export class ChatSession extends DurableObject {
     return this.history;
   }
 
-  async clearHistory() {
+  async clearSession() {
     this.history = [];
+    this.profile = null;
   }
 }
 
@@ -35,27 +45,63 @@ export default {
       return new Response(null, { headers: corsHeaders });
     }
 
+    if (url.pathname === "/start" && request.method === "POST") {
+      const { resume, targetRole, sessionId } = await request.json();
+
+      const id = env.CAREER_SESSION.idFromName(sessionId || "default");
+      const session = env.CAREER_SESSION.get(id);
+
+      await session.setProfile(resume, targetRole);
+
+      const systemPrompt = `You are an expert AI career coach with 20 years of experience in tech hiring.
+Your job is to give honest, actionable, and encouraging career advice.
+Always structure your responses clearly with sections and bullet points.
+Be direct but supportive. Focus on what will actually help the candidate land the job.`;
+
+      const firstMessage = `Here is my resume:\n\n${resume}\n\nI am targeting: ${targetRole}\n\nPlease analyze my resume and give me:
+1. A resume score out of 10
+2. My top 3 strengths for this role
+3. My top 3 gaps or weaknesses
+4. 3 specific action items to improve my chances
+Be honest and specific.`;
+
+      await session.addMessage("user", firstMessage);
+
+      const aiResponse = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
+        system: systemPrompt,
+        messages: [{ role: "user", content: firstMessage }],
+      });
+
+      const reply = aiResponse.response;
+      await session.addMessage("assistant", reply);
+
+      return new Response(JSON.stringify({ reply }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (url.pathname === "/chat" && request.method === "POST") {
       const { message, sessionId } = await request.json();
 
-      const id = env.CHAT_SESSION.idFromName(sessionId || "default");
-      const session = env.CHAT_SESSION.get(id);
+      const id = env.CAREER_SESSION.idFromName(sessionId || "default");
+      const session = env.CAREER_SESSION.get(id);
 
-      await session.addMessage("user", message);
+      const profile = await session.getProfile();
       const history = await session.getHistory();
 
-      const systemPrompt = `You are an expert web performance coach. 
-When given a website URL or a question about web performance, you analyze and provide:
-1. Specific performance issues
-2. Speed optimization suggestions  
-3. UX improvements
-4. Cloudflare-specific recommendations (CDN, caching, Workers)
-Keep responses clear, structured, and actionable.`;
+      await session.addMessage("user", message);
+
+      const systemPrompt = `You are an expert AI career coach with 20 years of experience in tech hiring.
+The candidate is targeting: ${profile?.targetRole || "a tech role"}.
+You have already analyzed their resume. Continue coaching them based on the conversation history.
+Be direct, specific, and actionable. Use bullet points where helpful.`;
 
       const messages = history.map((h) => ({
         role: h.role,
         content: h.content,
       }));
+
+      messages.push({ role: "user", content: message });
 
       const aiResponse = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
         system: systemPrompt,
@@ -72,14 +118,14 @@ Keep responses clear, structured, and actionable.`;
 
     if (url.pathname === "/clear" && request.method === "POST") {
       const { sessionId } = await request.json();
-      const id = env.CHAT_SESSION.idFromName(sessionId || "default");
-      const session = env.CHAT_SESSION.get(id);
-      await session.clearHistory();
+      const id = env.CAREER_SESSION.idFromName(sessionId || "default");
+      const session = env.CAREER_SESSION.get(id);
+      await session.clearSession();
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    return new Response("CF AI Web Coach API", { headers: corsHeaders });
+    return new Response("CF AI Career Coach API", { headers: corsHeaders });
   },
 };
